@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/xyperam/wizzflow/internal/config"
+	"github.com/xyperam/wizzflow/internal/database"
 	"github.com/xyperam/wizzflow/internal/handler"
 	"github.com/xyperam/wizzflow/internal/repository"
 	"github.com/xyperam/wizzflow/internal/routes"
@@ -13,8 +14,13 @@ import (
 
 func main() {
 	//inisialisasi db
+	dbPool, err := database.InitDB()
+	if err != nil {
+		log.Fatalf("Gagal connect to DB: %v", err)
+	}
+	defer dbPool.Close()
 	// inject depedency
-	repo := repository.NewRepository()
+	repo := repository.NewRepository(dbPool)
 	svc := service.NewService(repo)
 	hdl := handler.NewHandler(svc)
 

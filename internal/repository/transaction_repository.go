@@ -1,77 +1,107 @@
 package repository
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/xyperam/wizzflow/internal/models"
 )
 
 type TransactionRepository struct {
-	nextID       int
-	transactions []models.Transaction
+	db *pgxpool.Pool
 }
 
-func NewRepository() *TransactionRepository {
-	return &TransactionRepository{
-		nextID: 2,
-		transactions: []models.Transaction{
-			{ID: 1, Title: "tabungan", Amount: 2000, Type: "income", Category: "Salary", CreatedAt: time.Now()},
-		},
-	}
+func NewRepository(db *pgxpool.Pool) *TransactionRepository {
+	return &TransactionRepository{db: db}
 }
 
 // FindAll
 
-func (r *TransactionRepository) FindAll() []models.Transaction {
-	return r.transactions
+func (r *TransactionRepository) FindAll() ([]models.Transaction, error) {
+	query := `SELECT id,title,amount,type,category, created_at FROM transactions`
+	rows, err := r.db.Query(context.Background(), query)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		err := rows.Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, t)
+	}
+	return transactions, nil
 
 }
 
 // Save
 
-func (r *TransactionRepository) SaveTransaction(transaction models.Transaction) models.Transaction {
+func (r *TransactionRepository) SaveTransaction(t models.Transaction) (models.Transaction, error) {
+	query := `
+	INSERT INTO transactions (title,amount,type,category)
+	VALUES ($1,$2,$3,$4)
+	RETURNING id,created_at`
 
-	transaction.ID = r.nextID
-	transaction.CreatedAt = time.Now()
-	r.transactions = append(r.transactions, transaction)
+	err := r.db.QueryRow(context.Background(), query,
+		t.Title, t.Amount, t.Type, t.Category,
+	).Scan(&t.ID, &t.CreatedAt)
 
-	r.nextID++
-	return transaction
+	if err != nil {
+		return models.Transaction{}, err
+	}
+	return t, nil
 
 }
 
 // FindByID
-func (r *TransactionRepository) FindByID(id int) (*models.Transaction, error) {
-	for i := range r.transactions {
-		if r.transactions[i].ID == id {
-			// return pointer
-			return &r.transactions[i], nil
-		}
+func (r *TransactionRepository) FindByID(id int) (models.Transaction, error) {
+	var t models.Transaction
+	query := `SELECT id,title,amount,type,category, created_at FROM transactions WHERE id =$1 `
+
+	err := r.db.QueryRow(context.Background(), query, id).Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
+
+	if err != nil {
+		return models.Transaction{}, err
 	}
-	return nil, errors.New("transaction not found")
+	return t, nil
+
 }
 
 // Update
-func (r *TransactionRepository) UpdateTransaction(id int, updateTransaction models.Transaction) (models.Transaction, error) {
-	for i, transaction := range r.transactions {
-		if transaction.ID == id {
-			updateTransaction.ID = id
-			r.transactions[i] = updateTransaction
-			return r.transactions[i], nil
-		}
+func (r *TransactionRepository) UpdateTransaction(id int, t models.Transaction) (models.Transaction, error) {
+
+	query := `
+	UPDATE transactions
+	SET title = $1, amount = $2, type =$3, category = $4 WHERE id =$5
+	RETURNING id, title, amount, type, category, created_at`
+
+	err := r.db.QueryRow(context.Background(), query,
+		t.Title, t.Amount, t.Type, t.Category, id,
+	).Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
+
+	if err != nil {
+		return models.Transaction{}, err
 	}
-	return models.Transaction{}, fmt.Errorf("transaction with id %d not found", id)
+	return t, nil
+
 }
 
 // Delete
 func (r *TransactionRepository) DeleteTransaction(id int) error {
-	for i, transaction := range r.transactions {
-		if transaction.ID == id {
-			r.transactions = append(r.transactions[:i], r.transactions[i+1:]...)
-			return nil
-		}
+	query := `DELETE FROM transactions WHERE id=$1`
+
+	result, err := r.db.Exec(context.Background(), query, id)
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("transaction with id %d not found", id)
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("transaction with id %d not found", id)
+	}
+	return nil
 }
