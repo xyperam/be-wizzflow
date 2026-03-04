@@ -12,7 +12,7 @@ func SetupRoutes(hdl *handler.TransactionHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/transactions", hdl.GetTransactions)
-	mux.HandleFunc("/transactions/create", hdl.CreateTransaction)
+	mux.HandleFunc("/transactions/create", hdl.SaveTransaction)
 	mux.HandleFunc("/transactions/summary", hdl.GetSummary)
 	mux.HandleFunc("/transactions/update", hdl.UpdateTranscation)
 	mux.HandleFunc("/transactions/delete", hdl.DeleteTransaction)

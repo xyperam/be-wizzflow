@@ -8,19 +8,27 @@ import (
 	"github.com/xyperam/wizzflow/internal/models"
 )
 
-type TransactionRepository struct {
+type TransactionRepository interface {
+	FindAll(ctx context.Context) ([]models.Transaction, error)
+	FindByID(ctx context.Context, id int) (models.Transaction, error)
+	SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error)
+	UpdateTransaction(ctx context.Context, id int, t models.Transaction) (models.Transaction, error)
+	DeleteTransaction(ctx context.Context, id int) error
+}
+
+type postgresRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgxpool.Pool) *TransactionRepository {
-	return &TransactionRepository{db: db}
+func NewRepository(db *pgxpool.Pool) TransactionRepository {
+	return &postgresRepository{db: db}
 }
 
 // FindAll
 
-func (r *TransactionRepository) FindAll() ([]models.Transaction, error) {
+func (r *postgresRepository) FindAll(ctx context.Context) ([]models.Transaction, error) {
 	query := `SELECT id,title,amount,type,category, created_at FROM transactions`
-	rows, err := r.db.Query(context.Background(), query)
+	rows, err := r.db.Query(ctx, query)
 
 	if err != nil {
 		return nil, err
@@ -42,13 +50,13 @@ func (r *TransactionRepository) FindAll() ([]models.Transaction, error) {
 
 // Save
 
-func (r *TransactionRepository) SaveTransaction(t models.Transaction) (models.Transaction, error) {
+func (r *postgresRepository) SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error) {
 	query := `
 	INSERT INTO transactions (title,amount,type,category)
 	VALUES ($1,$2,$3,$4)
 	RETURNING id,created_at`
 
-	err := r.db.QueryRow(context.Background(), query,
+	err := r.db.QueryRow(ctx, query,
 		t.Title, t.Amount, t.Type, t.Category,
 	).Scan(&t.ID, &t.CreatedAt)
 
@@ -60,11 +68,11 @@ func (r *TransactionRepository) SaveTransaction(t models.Transaction) (models.Tr
 }
 
 // FindByID
-func (r *TransactionRepository) FindByID(id int) (models.Transaction, error) {
+func (r *postgresRepository) FindByID(ctx context.Context, id int) (models.Transaction, error) {
 	var t models.Transaction
 	query := `SELECT id,title,amount,type,category, created_at FROM transactions WHERE id =$1 `
 
-	err := r.db.QueryRow(context.Background(), query, id).Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
+	err := r.db.QueryRow(ctx, query, id).Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
 
 	if err != nil {
 		return models.Transaction{}, err
@@ -74,14 +82,14 @@ func (r *TransactionRepository) FindByID(id int) (models.Transaction, error) {
 }
 
 // Update
-func (r *TransactionRepository) UpdateTransaction(id int, t models.Transaction) (models.Transaction, error) {
+func (r *postgresRepository) UpdateTransaction(ctx context.Context, id int, t models.Transaction) (models.Transaction, error) {
 
 	query := `
 	UPDATE transactions
 	SET title = $1, amount = $2, type =$3, category = $4 WHERE id =$5
 	RETURNING id, title, amount, type, category, created_at`
 
-	err := r.db.QueryRow(context.Background(), query,
+	err := r.db.QueryRow(ctx, query,
 		t.Title, t.Amount, t.Type, t.Category, id,
 	).Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
 
@@ -93,10 +101,10 @@ func (r *TransactionRepository) UpdateTransaction(id int, t models.Transaction) 
 }
 
 // Delete
-func (r *TransactionRepository) DeleteTransaction(id int) error {
+func (r *postgresRepository) DeleteTransaction(ctx context.Context, id int) error {
 	query := `DELETE FROM transactions WHERE id=$1`
 
-	result, err := r.db.Exec(context.Background(), query, id)
+	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		return err
 	}

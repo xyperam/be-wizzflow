@@ -19,12 +19,16 @@ func NewHandler(s *service.TransactionService) *TransactionHandler {
 
 func (h *TransactionHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
 	//get data froms service
-	transactions := h.service.GetAllTransaction()
+	transactions, err := h.service.GetAllTransaction(r.Context())
+	if err != nil {
+		http.Error(w, "Gagal Ambil Data", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(transactions)
 }
 
-func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Request) {
+func (h *TransactionHandler) SaveTransaction(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -39,11 +43,15 @@ func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	createTransaction := h.service.CreateTransaction(transaction)
+	result, err := h.service.SaveTransaction(r.Context(), transaction)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createTransaction)
+	json.NewEncoder(w).Encode(result)
 
 }
 
@@ -67,7 +75,7 @@ func (h *TransactionHandler) UpdateTranscation(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	updatedtransaction, err := h.service.UpdateTransaction(id, transaction)
+	updatedtransaction, err := h.service.UpdateTransaction(r.Context(), id, transaction)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -87,7 +95,7 @@ func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Re
 	idStr := r.URL.Query().Get("id")
 	id, _ := strconv.Atoi(idStr)
 
-	err := h.service.DeleteTransaction(id)
+	err := h.service.DeleteTransaction(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusNotFound)
 		return
@@ -96,7 +104,11 @@ func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Re
 
 }
 func (h *TransactionHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
-	transactions := h.service.GetSummary()
+	transactions, err := h.service.GetSummary(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(transactions)
 
