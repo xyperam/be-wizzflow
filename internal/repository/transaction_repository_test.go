@@ -57,3 +57,29 @@ func TestDeleteTransaction(t *testing.T) {
 		t.Error("Harusnya error karena ID 999999 tidak ada, tapi malah nil")
 	}
 }
+
+func TestFindAll(t *testing.T) {
+	ctx := context.Background()
+	dsn := "postgres://user:password@localhost:5432/wizzflow"
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("failed to create pool: %v", err)
+	}
+	defer pool.Close()
+	repo := NewRepository(pool)
+
+	dummy := models.Transaction{Title: "Test", Amount: 100, Type: "expense", Category: "test"}
+	_, err = repo.SaveTransaction(dummy)
+	if err != nil {
+		t.Fatalf("Gagal Membuat data,%v", err)
+	}
+
+	transactions, err := repo.FindAll()
+	if err != nil {
+		t.Fatalf("gagal find All %v", err)
+	}
+
+	if len(transactions) == 0 {
+		t.Errorf("Harusnya data tidak kosong")
+	}
+}

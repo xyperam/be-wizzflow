@@ -8,8 +8,8 @@ import (
 )
 
 func InitDB() (*pgxpool.Pool, error) {
-	dsn := "postgres://user:password@localhost:5432/wizzflow"
-
+	dsn := "postgres://user:password@localhost:5433/wizzflow?sslmode=disable"
+	fmt.Printf("Mencoba konek dengan DSN: '%s'\n", dsn)
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
