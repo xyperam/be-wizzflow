@@ -45,7 +45,11 @@ func (h *TransactionHandler) SaveTransaction(w http.ResponseWriter, r *http.Requ
 
 	result, err := h.service.SaveTransaction(r.Context(), transaction)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": err.Error(),
+		})
 		return
 	}
 

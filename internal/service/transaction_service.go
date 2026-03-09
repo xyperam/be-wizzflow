@@ -12,7 +12,7 @@ type TransactionService struct {
 	repo repository.TransactionRepository
 }
 
-func NewService(r repository.TransactionRepository) *TransactionService {
+func NewTransactionService(r repository.TransactionRepository) *TransactionService {
 	return &TransactionService{repo: r}
 
 }
@@ -22,12 +22,17 @@ func (s *TransactionService) GetAllTransaction(ctx context.Context) ([]models.Tr
 }
 
 func (s *TransactionService) SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error) {
+
 	if t.Amount <= 0 {
 		return models.Transaction{}, errors.New("Nominal tidak boleh nol atau minus")
 	}
 	if t.Title == "" {
 		return models.Transaction{}, errors.New("Title tidak boleh kosong")
 	}
+	if t.Type != "income" && t.Type != "expense" {
+		return models.Transaction{}, errors.New("tipe transaksi harus income atau expense")
+	}
+
 	return s.repo.SaveTransaction(ctx, t)
 }
 
