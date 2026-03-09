@@ -13,24 +13,24 @@ import (
 )
 
 func main() {
+	// load config
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
 	//inisialisasi db
-	dbPool, err := database.InitDB()
+	dbPool, err := database.InitDB(cfg)
 	if err != nil {
 		log.Fatalf("Gagal connect to DB: %v", err)
 	}
 	defer dbPool.Close()
 	// inject depedency
 	repo := repository.NewRepository(dbPool)
-	svc := service.NewService(repo)
+	svc := service.NewTransactionService(repo)
 	hdl := handler.NewHandler(svc)
 
 	router := routes.SetupRoutes(hdl)
-
-	// load config
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
 
 	log.Println("Starting server on port " + cfg.Port)
 

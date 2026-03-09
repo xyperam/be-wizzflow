@@ -1,49 +1,75 @@
 package service
 
 import (
+	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/xyperam/wizzflow/internal/models"
-	"github.com/xyperam/wizzflow/internal/repository"
 )
 
-func TestGetSummary(t *testing.T) {
-	repo := repository.NewRepository()
-	svc := NewService(repo)
+type MockRepository struct {
+	mock.Mock
+}
 
-	// Kita asumsikan ada data awal 2000 (Income)
-	// Mari kita tambahkan data secara spesifik
-	testCases := []struct {
-		name   string
-		title  string
-		amount float64
-		tType  string // "income" atau "expense"
-	}{
-		{"Tambah Income", "Project A", 5000, "income"},
-		{"Tambah Expense", "Sewa Kantor", 1500, "expense"},
-	}
+// DeleteTransaction implements repository.TransactionRepository.
+func (m *MockRepository) DeleteTransaction(ctx context.Context, id int) error {
+	panic("unimplemented")
+}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			svc.CreateTransaction(models.Transaction{
-				Title:  tc.title,
-				Amount: tc.amount,
-				Type:   tc.tType,
-			})
-		})
-	}
+// FindAll implements repository.TransactionRepository.
+func (m *MockRepository) FindAll(ctx context.Context) ([]models.Transaction, error) {
+	panic("unimplemented")
+}
 
-	summary := svc.GetSummary()
+// FindByID implements repository.TransactionRepository.
+func (m *MockRepository) FindByID(ctx context.Context, id int) (models.Transaction, error) {
+	panic("unimplemented")
+}
 
-	// Kalkulasi ekspektasi:
-	// Income: 2000 (awal) + 5000 = 7000
-	// Expense: 1500
-	// Balance: 5500
-	expectedIncome := 7000.0
-	// expectedExpense := 1500.0
-	// expectedBalance := 5500.0
+// UpdateTransaction implements repository.TransactionRepository.
+func (m *MockRepository) UpdateTransaction(ctx context.Context, id int, t models.Transaction) (models.Transaction, error) {
+	panic("unimplemented")
+}
 
-	if summary.TotalIncome != expectedIncome {
-		t.Errorf("%s: Income salah, mau %.2f dapet %.2f", t.Name(), expectedIncome, summary.TotalIncome)
-	}
+func (m *MockRepository) SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error) {
+	args := m.Called(ctx, t)
+	return args.Get(0).(models.Transaction), args.Error(1)
+}
+
+func TestSaveTransaction_Validation(t *testing.T) {
+	repo := new(MockRepository)
+	svc := NewTransactionService(repo) // inject mock repo ke service
+
+	t.Run("Return Error if nominal minus", func(t *testing.T) {
+		input := models.Transaction{
+			Title:  "Beli Kopi",
+			Amount: -5000,
+			Type:   "expense",
+		}
+		result, err := svc.SaveTransaction(context.Background(), input)
+		assert.Error(t, err)
+		assert.Equal(t, "Nominal tidak boleh nol atau minus", err.Error())
+		assert.Empty(t, result)
+
+		repo.AssertNotCalled(t, "SaveTransaction", mock.Anything, mock.Anything)
+	})
+	t.Run("Succes Save Transaction", func(t *testing.T) {
+		input := models.Transaction{
+			Title:  "Gajian",
+			Amount: 1000000,
+			Type:   "income",
+		}
+		// expected balikin data yang sama
+		repo.On("SaveTransaction", mock.Anything, input).Return(input, nil)
+		result, err := svc.SaveTransaction(context.Background(), input)
+
+		assert.NoError(t, err)
+		assert.Equal(t, input.Amount, result.Amount)
+		assert.Equal(t, "Gajian", result.Title)
+
+		//verif jika method di repo beneran dipanggil
+		repo.AssertExpectations(t)
+	})
 }

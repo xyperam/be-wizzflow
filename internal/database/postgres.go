@@ -5,10 +5,12 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/xyperam/wizzflow/internal/config"
 )
 
-func InitDB() (*pgxpool.Pool, error) {
-	dsn := "postgres://user:password@localhost:5433/wizzflow?sslmode=disable"
+func InitDB(cfg *config.Config) (*pgxpool.Pool, error) {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName)
 	fmt.Printf("Mencoba konek dengan DSN: '%s'\n", dsn)
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
