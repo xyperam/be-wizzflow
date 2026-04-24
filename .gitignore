@@ -1,0 +1,30 @@
+# File biner hasil kompilasi (Output dari go build)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+# Nama aplikasi Anda jika Anda menentukannya saat build
+/nama-aplikasi-anda
+
+# File konfigurasi sensitif
+.env
+.env.local
+
+# Dependensi (Opsional)
+# Umumnya vendor/ tidak di-commit jika menggunakan Go Modules
+# vendor/
+
+# File log dan temporary
+*.log
+tmp/
+
+# Testing
+*.test
+/coverage.out
+
+# Tooling
+.idea/
+.vscode/
+*.swp
