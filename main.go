@@ -26,11 +26,15 @@ func main() {
 	}
 	defer dbPool.Close()
 	// inject depedency
-	repo := repository.NewRepository(dbPool)
-	svc := service.NewTransactionService(repo)
-	hdl := handler.NewHandler(svc)
+	authRepo := repository.NewUserRepository(dbPool)
+	authSvc := service.NewAuthService(authRepo, cfg)
+	authHdl := handler.NewAuthHandler(authSvc)
 
-	router := routes.SetupRoutes(hdl)
+	txnRepo := repository.NewRepository(dbPool)
+	txnSvc := service.NewTransactionService(txnRepo)
+	txnHdl := handler.NewTransactionHandler(txnSvc) // Pastikan nama fungsinya sesuai
+
+	router := routes.SetupRoutes(txnHdl, authHdl, cfg)
 
 	log.Println("Starting server on port " + cfg.Port)
 
