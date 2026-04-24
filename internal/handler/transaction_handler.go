@@ -1,103 +1,93 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/xyperam/wizzflow/internal/models"
 	"github.com/xyperam/wizzflow/internal/service"
 )
 
 type TransactionHandler struct {
-	service *service.TransactionService
+	service service.TransactionService
 }
 
-func NewHandler(s *service.TransactionService) *TransactionHandler {
+func NewTransactionHandler(s service.TransactionService) *TransactionHandler {
 	return &TransactionHandler{service: s}
 }
 
-func (h *TransactionHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
+func (h *TransactionHandler) GetTransactions(c *gin.Context) {
+
+	//get User id
+	userID := c.MustGet("user_id").(int)
+
 	//get data froms service
-	transactions := h.service.GetAllTransaction()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(transactions)
-}
-
-func (h *TransactionHandler) CreateTransaction(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var transaction models.Transaction
-	err := json.NewDecoder(r.Body).Decode(&transaction)
-
+	transactions, err := h.service.GetAllTransaction(c.Request.Context(), userID)
 	if err != nil {
-		http.Error(w, "Invalid Input", http.StatusBadRequest)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal Ambil Data"})
 		return
 	}
-
-	createTransaction := h.service.CreateTransaction(transaction)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createTransaction)
-
+	c.JSON(http.StatusOK, transactions)
 }
 
-func (h *TransactionHandler) UpdateTranscation(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func (h *TransactionHandler) SaveTransaction(c *gin.Context) {
+	var transaction models.Transaction
+	if err := c.ShouldBindJSON(&transaction); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Input Invalid"})
 		return
 	}
 
-	idStr := r.URL.Query().Get("id")
+	c.JSON(http.StatusCreated, gin.H{"message": "Transaksi berhasil disimpan"})
+}
+
+func (h *TransactionHandler) UpdateTranscation(c *gin.Context) {
+	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tidak valid"})
 		return
 	}
+
 	var transaction models.Transaction
-
-	if err := json.NewDecoder(r.Body).Decode(&transaction); err != nil {
-		http.Error(w, "Invalid payload", http.StatusBadRequest)
+	if err := c.ShouldBindJSON(&transaction); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Input Invalid"})
 		return
 	}
 
-	updatedtransaction, err := h.service.UpdateTransaction(id, transaction)
+	userID := c.MustGet("user_id").(int)
+	updated, err := h.service.UpdateTransaction(c.Request.Context(), id, userID, transaction)
+
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	// kirim response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(updatedtransaction)
+	c.JSON(http.StatusOK, updated)
 }
-
-// delete shandler
-func (h *TransactionHandler) DeleteTransaction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method is not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	idStr := r.URL.Query().Get("id")
+func (h *TransactionHandler) DeleteTransaction(c *gin.Context) {
+	idStr := c.Param("id")
 	id, _ := strconv.Atoi(idStr)
 
-	err := h.service.DeleteTransaction(id)
+	userID := c.MustGet("user_id").(int)
+
+	err := h.service.DeleteTransaction(c.Request.Context(), id, userID)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Data tidak ditemukan atau bukan milikmu"})
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
 
+	c.Status(http.StatusNoContent)
 }
-func (h *TransactionHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
-	transactions := h.service.GetSummary()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(transactions)
 
+// 5. Get Summary
+func (h *TransactionHandler) GetSummary(c *gin.Context) {
+	userID := c.MustGet("user_id").(int)
+
+	summary, err := h.service.GetSummary(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, summary)
 }
