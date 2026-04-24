@@ -9,7 +9,8 @@ import (
 )
 
 type TransactionRepository interface {
-	FindAll(ctx context.Context) ([]models.Transaction, error)
+	// Tambahkan userID di parameter agar query bisa difilter
+	FindAll(ctx context.Context, userID int) ([]models.Transaction, error)
 	FindByID(ctx context.Context, id int) (models.Transaction, error)
 	SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error)
 	UpdateTransaction(ctx context.Context, id int, t models.Transaction) (models.Transaction, error)
@@ -24,11 +25,10 @@ func NewRepository(db *pgxpool.Pool) TransactionRepository {
 	return &postgresRepository{db: db}
 }
 
-// FindAll
-
-func (r *postgresRepository) FindAll(ctx context.Context) ([]models.Transaction, error) {
-	query := `SELECT id,title,amount,type,category, created_at FROM transactions`
-	rows, err := r.db.Query(ctx, query)
+// 1. FindAll - Sekarang hanya ambil data milik userID terkait
+func (r *postgresRepository) FindAll(ctx context.Context, userID int) ([]models.Transaction, error) {
+	query := `SELECT id, title, amount, type, category, created_at FROM transactions WHERE user_id = $1`
+	rows, err := r.db.Query(ctx, query, userID)
 
 	if err != nil {
 		return nil, err
@@ -45,49 +45,47 @@ func (r *postgresRepository) FindAll(ctx context.Context) ([]models.Transaction,
 		transactions = append(transactions, t)
 	}
 	return transactions, nil
-
 }
 
-// Save
-
+// 2. Save - Simpan userID ke database
 func (r *postgresRepository) SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error) {
 	query := `
-	INSERT INTO transactions (title,amount,type,category)
-	VALUES ($1,$2,$3,$4)
-	RETURNING id,created_at`
+    INSERT INTO transactions (user_id, title, amount, type, category)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, created_at`
 
 	err := r.db.QueryRow(ctx, query,
-		t.Title, t.Amount, t.Type, t.Category,
+		t.UserID, t.Title, t.Amount, t.Type, t.Category,
 	).Scan(&t.ID, &t.CreatedAt)
 
 	if err != nil {
 		return models.Transaction{}, err
 	}
 	return t, nil
-
 }
 
-// FindByID
+// 3. FindByID
 func (r *postgresRepository) FindByID(ctx context.Context, id int) (models.Transaction, error) {
 	var t models.Transaction
-	query := `SELECT id,title,amount,type,category, created_at FROM transactions WHERE id =$1 `
+	// Kita tetap butuh user_id di scan supaya Service bisa cek kepemilikan
+	query := `SELECT id, user_id, title, amount, type, category, created_at FROM transactions WHERE id = $1`
 
-	err := r.db.QueryRow(ctx, query, id).Scan(&t.ID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt)
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&t.ID, &t.UserID, &t.Title, &t.Amount, &t.Type, &t.Category, &t.CreatedAt,
+	)
 
 	if err != nil {
 		return models.Transaction{}, err
 	}
 	return t, nil
-
 }
 
-// Update
+// 4. Update
 func (r *postgresRepository) UpdateTransaction(ctx context.Context, id int, t models.Transaction) (models.Transaction, error) {
-
 	query := `
-	UPDATE transactions
-	SET title = $1, amount = $2, type =$3, category = $4 WHERE id =$5
-	RETURNING id, title, amount, type, category, created_at`
+    UPDATE transactions
+    SET title = $1, amount = $2, type = $3, category = $4 WHERE id = $5
+    RETURNING id, title, amount, type, category, created_at`
 
 	err := r.db.QueryRow(ctx, query,
 		t.Title, t.Amount, t.Type, t.Category, id,
@@ -97,12 +95,11 @@ func (r *postgresRepository) UpdateTransaction(ctx context.Context, id int, t mo
 		return models.Transaction{}, err
 	}
 	return t, nil
-
 }
 
-// Delete
+// 5. Delete
 func (r *postgresRepository) DeleteTransaction(ctx context.Context, id int) error {
-	query := `DELETE FROM transactions WHERE id=$1`
+	query := `DELETE FROM transactions WHERE id = $1`
 
 	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {

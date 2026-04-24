@@ -14,6 +14,7 @@ type Config struct {
 	DBHost     string
 	DBPort     string
 	DBName     string
+	JWTSecret  string
 }
 
 func LoadConfig() (*Config, error) {

@@ -8,26 +8,36 @@ import (
 	"github.com/xyperam/wizzflow/internal/repository"
 )
 
-type TransactionService struct {
+type TransactionService interface {
+	GetAllTransaction(ctx context.Context, userID int) ([]models.Transaction, error)
+	SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error)
+	UpdateTransaction(ctx context.Context, id int, userID int, t models.Transaction) (models.Transaction, error)
+	DeleteTransaction(ctx context.Context, id int, userID int) error
+	GetSummary(ctx context.Context, userID int) (models.Summary, error)
+}
+
+// Gunakan nama kecil (unexported) agar tidak bentrok dengan interface
+type transactionService struct {
 	repo repository.TransactionRepository
 }
 
-func NewTransactionService(r repository.TransactionRepository) *TransactionService {
-	return &TransactionService{repo: r}
-
+// Return interface-nya, bukan struct-nya
+func NewTransactionService(r repository.TransactionRepository) TransactionService {
+	return &transactionService{repo: r}
 }
 
-func (s *TransactionService) GetAllTransaction(ctx context.Context) ([]models.Transaction, error) {
-	return s.repo.FindAll(ctx)
+// 1. Get All - Pastikan nerima userID
+func (s *transactionService) GetAllTransaction(ctx context.Context, userID int) ([]models.Transaction, error) {
+	return s.repo.FindAll(ctx, userID) // Repo juga harus nerima userID ya bray!
 }
 
-func (s *TransactionService) SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error) {
-
+// 2. Save
+func (s *transactionService) SaveTransaction(ctx context.Context, t models.Transaction) (models.Transaction, error) {
 	if t.Amount <= 0 {
-		return models.Transaction{}, errors.New("Nominal tidak boleh nol atau minus")
+		return models.Transaction{}, errors.New("nominal tidak boleh nol atau minus")
 	}
 	if t.Title == "" {
-		return models.Transaction{}, errors.New("Title tidak boleh kosong")
+		return models.Transaction{}, errors.New("title tidak boleh kosong")
 	}
 	if t.Type != "income" && t.Type != "expense" {
 		return models.Transaction{}, errors.New("tipe transaksi harus income atau expense")
@@ -36,30 +46,44 @@ func (s *TransactionService) SaveTransaction(ctx context.Context, t models.Trans
 	return s.repo.SaveTransaction(ctx, t)
 }
 
-func (s *TransactionService) UpdateTransaction(ctx context.Context, id int, t models.Transaction) (models.Transaction, error) {
-
-	_, err := s.repo.FindByID(ctx, id)
-
+// 3. Update - Cek kepemilikan data
+func (s *transactionService) UpdateTransaction(ctx context.Context, id int, userID int, t models.Transaction) (models.Transaction, error) {
+	// Cari data aslinya dulu
+	existing, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return models.Transaction{}, errors.New("data tidak ditemukan")
 	}
+
+	// SECURITY CHECK: Pastikan user_id di DB sama dengan user_id yang lagi login
+	if existing.UserID != userID {
+		return models.Transaction{}, errors.New("kamu tidak punya akses ke data ini")
+	}
+
 	return s.repo.UpdateTransaction(ctx, id, t)
 }
 
-// service delete
-func (s *TransactionService) DeleteTransaction(ctx context.Context, id int) error {
+// 4. Delete - Cek kepemilikan data
+func (s *transactionService) DeleteTransaction(ctx context.Context, id int, userID int) error {
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return errors.New("data tidak ditemukan")
+	}
+
+	if existing.UserID != userID {
+		return errors.New("kamu tidak punya akses untuk menghapus data ini")
+	}
+
 	return s.repo.DeleteTransaction(ctx, id)
 }
 
-func (s *TransactionService) GetSummary(ctx context.Context) (models.Summary, error) {
-	transactions, err := s.repo.FindAll(ctx)
-
+// 5. Summary - Filter per User
+func (s *transactionService) GetSummary(ctx context.Context, userID int) (models.Summary, error) {
+	transactions, err := s.repo.FindAll(ctx, userID)
 	if err != nil {
 		return models.Summary{}, err
 	}
 
 	var totalIncome, totalExpense float64
-
 	for _, t := range transactions {
 		switch t.Type {
 		case "income":
@@ -68,6 +92,7 @@ func (s *TransactionService) GetSummary(ctx context.Context) (models.Summary, er
 			totalExpense += t.Amount
 		}
 	}
+
 	return models.Summary{
 		TotalIncome:  totalIncome,
 		TotalExpense: totalExpense,
